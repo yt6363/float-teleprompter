@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Teleprompter Overlay</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: transparent;
+    color: #fff;
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    -webkit-app-region: drag;
+    border: 2px solid rgba(0,0,0,0.08);
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+    overflow: hidden;
+  }
+
+  /* ── Mode bar (warm cream) ── */
+  #mode-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: #faf9f7;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    z-index: 20;
+    -webkit-app-region: no-drag;
+  }
+  #mode-bar button {
+    background: #fff;
+    color: #2d2b29;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 5px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+    letter-spacing: 0.02em;
+  }
+  #mode-bar button:hover {
+    background: #f0efed;
+    border-color: rgba(0,0,0,0.12);
+    color: #1a1a1a;
+  }
+  #mode-bar button.active {
+    background: #ff6b4a;
+    border-color: #ff6b4a;
+    color: #fff;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(255,107,74,0.25);
+  }
+  #mode-bar .spacer { flex: 1; }
+
+  /* ── Click-through badge ── */
+  #ct-badge {
+    font-size: 9px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    pointer-events: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.15s ease;
+  }
+  #ct-badge.through {
+    background: #e6f9ec;
+    color: #22a352;
+    border: 1px solid rgba(34,163,82,0.15);
+  }
+  #ct-badge.interactive {
+    background: #fce8e6;
+    color: #d93025;
+    border: 1px solid rgba(217,48,37,0.15);
+  }
+
+  /* ══════════════════════════════
+     TELEPROMPTER
+     ══════════════════════════════ */
+  #teleprompter-view { flex: 1; display: flex; flex-direction: column; }
+  #teleprompter-view.hidden { display: none; }
+
+  #viewport { flex: 1; position: relative; overflow: hidden; -webkit-app-region: drag; }
+
+  body.scroll-horizontal #viewport { display: flex; align-items: center; }
+  body.scroll-horizontal #ticker { display: block; white-space: nowrap; padding-left: 100vw; }
+  body.scroll-horizontal #viewport::before,
+  body.scroll-horizontal #viewport::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 80px;
+    pointer-events: none; z-index: 2;
+  }
+  body.scroll-horizontal #viewport::before { left: 0; background: none; }
+  body.scroll-horizontal #viewport::after { right: 0; background: none; }
+  body.scroll-horizontal #focus-line { left: 50%; top: 0; bottom: 0; width: 2px; }
+
+  body.scroll-vertical #viewport { display: block; padding: 0 6vw; }
+  body.scroll-vertical #ticker {
+    display: block; white-space: normal; padding-top: 50vh; padding-bottom: 60vh; text-align: center;
+  }
+  body.scroll-vertical #ticker p { margin-bottom: 0.6em; }
+  body.scroll-vertical #viewport::before,
+  body.scroll-vertical #viewport::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 15vh;
+    pointer-events: none; z-index: 2;
+  }
+  body.scroll-vertical #viewport::before { top: 0; background: none; }
+  body.scroll-vertical #viewport::after { bottom: 0; background: none; }
+  body.scroll-vertical #focus-line { top: 50%; left: 0; right: 0; height: 2px; }
+
+  #ticker {
+    font-size: 48px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;
+    will-change: transform;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.7), 0 0 2px rgba(0,0,0,0.5);
+  }
+  #focus-line {
+    position: absolute;
+    background: linear-gradient(90deg, transparent, #ff6b4a, #ff6b4a, transparent);
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* Teleprompter controls (cream panel) */
+  #tp-controls {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: #faf9f7;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    font-size: 11px; color: #2d2b29;
+    flex-wrap: wrap; z-index: 10; -webkit-app-region: no-drag;
+  }
+  #tp-controls.hidden { display: none; }
+  #tp-controls .group { display: flex; align-items: center; gap: 5px; }
+  #tp-controls button {
+    background: #fff;
+    color: #2d2b29;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  #tp-controls button:hover {
+    background: #f0efed;
+    border-color: rgba(0,0,0,0.12);
+    color: #1a1a1a;
+  }
+  #tp-controls button.active {
+    background: #ff6b4a;
+    border-color: #ff6b4a;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(255,107,74,0.2);
+  }
+  #tp-controls input[type="range"] {
+    width: 80px;
+    accent-color: #ff6b4a;
+  }
+  #tp-controls input[type="number"] {
+    background: #fff;
+    color: #1a1a1a;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 3px 6px;
+    width: 48px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+  }
+  #tp-controls input[type="number"]:focus {
+    border-color: #ff6b4a;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255,107,74,0.15);
+  }
+  #tp-controls textarea {
+    flex: 1; min-width: 150px;
+    background: #fff;
+    color: #1a1a1a;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-family: inherit;
+    resize: vertical;
+    height: 28px;
+    transition: border-color 0.15s ease;
+  }
+  #tp-controls textarea:focus {
+    border-color: #ff6b4a;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255,107,74,0.15);
+  }
+  #tp-controls textarea::placeholder {
+    color: #999;
+  }
+
+  .status {
+    font-weight: 600;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.04em;
+  }
+  .status:not(.paused) {
+    color: #22a352;
+    background: #e6f9ec;
+    border: 1px solid rgba(34,163,82,0.15);
+  }
+  .status.paused {
+    color: #d93025;
+    background: #fce8e6;
+    border: 1px solid rgba(217,48,37,0.15);
+  }
+  .hint {
+    color: #999;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ══════════════════════════════
+     STICKY NOTES
+     ══════════════════════════════ */
+  #notes-view { flex: 1; position: relative; overflow: auto; padding: 16px; -webkit-app-region: no-drag; background: #faf9f7; }
+  #notes-view.hidden { display: none; }
+
+  .sticky-note {
+    position: absolute;
+    width: 240px;
+    min-height: 120px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+    font-size: 13px;
+    cursor: default;
+    overflow: hidden;
+    border: none;
+    border-left: 4px solid rgba(0,0,0,0.1);
+    transition: box-shadow 0.15s ease;
+  }
+  .sticky-note:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .sticky-note .note-header {
+    display: flex; align-items: center; padding: 7px 10px; cursor: grab;
+    gap: 6px; font-size: 11px; font-weight: 600;
+    background: rgba(0,0,0,0.04);
+    user-select: none;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .sticky-note .note-header:active { cursor: grabbing; }
+  .sticky-note .note-title {
+    flex: 1; background: none; border: none; color: #2d2b29 !important;
+    font-size: 11px; font-weight: 600; font-family: inherit; outline: none;
+  }
+  .sticky-note .note-del {
+    background: none; border: none; color: #2d2b29 !important; cursor: pointer;
+    font-size: 14px; opacity: 0.4; padding: 0 2px;
+    transition: opacity 0.15s ease;
+  }
+  .sticky-note .note-del:hover { opacity: 0.9; }
+  .sticky-note .note-body {
+    flex: 1; padding: 10px; background: none; border: none; color: #2d2b29 !important;
+    font-size: 13px; font-family: inherit; resize: none; outline: none;
+    min-height: 80px; line-height: 1.5;
+  }
+  .sticky-note .note-resize {
+    position: absolute; bottom: 0; right: 0; width: 16px; height: 16px;
+    cursor: nwse-resize; opacity: 0.25;
+    transition: opacity 0.15s ease;
+  }
+  .sticky-note:hover .note-resize { opacity: 0.5; }
+  .sticky-note .note-resize::after {
+    content: ""; position: absolute; bottom: 3px; right: 3px;
+    width: 7px; height: 7px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    border-radius: 1px;
+  }
+
+  /* Notes toolbar (cream panel) */
+  #notes-toolbar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: #faf9f7;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    font-size: 11px;
+    color: #2d2b29;
+    z-index: 10;
+    -webkit-app-region: no-drag;
+  }
+  #notes-toolbar.hidden { display: none; }
+  #notes-toolbar button {
+    background: #fff;
+    color: #2d2b29;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  #notes-toolbar button:hover {
+    background: #f0efed;
+    border-color: rgba(0,0,0,0.12);
+    color: #1a1a1a;
+  }
+  #notes-toolbar select {
+    background: #fff;
+    color: #2d2b29;
+    border: 1px solid rgba(0,0,0,0.08);
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+  }
+  #notes-toolbar select:focus {
+    border-color: #ff6b4a;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255,107,74,0.15);
+  }
+
+  /* ── Scrollbar styling ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.1);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.2);
+  }
+</style>
+</head>
+<body class="scroll-horizontal">
+
+<!-- ── Top bar ── -->
+<div id="mode-bar">
+  <button id="appModeTele" class="active">Teleprompter</button>
+  <button id="appModeNotes">Notes</button>
+  <span class="spacer"></span>
+  <span id="ct-badge" class="through">CLICK-THROUGH</span>
+</div>
+
+<!-- ── Teleprompter ── -->
+<div id="teleprompter-view">
+  <div id="viewport">
+    <div id="focus-line"></div>
+    <div id="ticker"></div>
+  </div>
+  <div id="tp-controls">
+    <div class="group">
+      <button id="scrollHBtn" class="active">H</button>
+      <button id="scrollVBtn">V</button>
+    </div>
+    <div class="group">
+      <button id="playBtn">Play</button>
+      <button id="restartBtn">Rst</button>
+      <span id="status" class="status paused">PAUSED</span>
+    </div>
+    <div class="group">
+      <input type="range" id="speed" min="20" max="400" value="120" />
+      <span id="speedVal">120</span>
+    </div>
+    <div class="group">
+      <input type="number" id="size" min="24" max="200" value="48" />px
+    </div>
+    <textarea id="script-input" placeholder="Paste script, click Load"></textarea>
+    <button id="loadScriptBtn">Load</button>
+    <span class="hint">Cmd+Shift: T=click P=play R=restart H=controls Q=quit</span>
+  </div>
+</div>
+
+<!-- ── Sticky Notes ── -->
+<div id="notes-view" class="hidden"></div>
+<div id="notes-toolbar" class="hidden">
+  <button id="addStickyBtn">+ Note</button>
+  <select id="colorPicker">
+    <option value="#e8dff5">Lavender</option>
+    <option value="#d6f5e8">Mint</option>
+    <option value="#ffe8d6">Peach</option>
+    <option value="#d6e8f5">Sky</option>
+    <option value="#f5f0d6">Lemon</option>
+    <option value="#f5d6e0">Rose</option>
+  </select>
+  <button id="clearAllNotesBtn">Clear</button>
+  <span class="hint" style="margin-left:auto">Drag to move / resize</span>
+</div>
+
+<script>
+// ══════════════════════════════
+//  APP MODE
+// ══════════════════════════════
+let appMode = 'teleprompter';
+const appModeTele = document.getElementById('appModeTele');
+const appModeNotes = document.getElementById('appModeNotes');
+const teleView = document.getElementById('teleprompter-view');
+const notesView = document.getElementById('notes-view');
+const tpControls = document.getElementById('tp-controls');
+const notesToolbar = document.getElementById('notes-toolbar');
+
+function switchAppMode(m) {
+  appMode = m;
+  appModeTele.classList.toggle('active', m === 'teleprompter');
+  appModeNotes.classList.toggle('active', m === 'notes');
+  teleView.classList.toggle('hidden', m !== 'teleprompter');
+  tpControls.classList.toggle('hidden', m !== 'teleprompter');
+  notesView.classList.toggle('hidden', m !== 'notes');
+  notesToolbar.classList.toggle('hidden', m !== 'notes');
+  if (m === 'teleprompter') measure();
+  if (m === 'notes') { pause(); renderStickies(); }
+}
+appModeTele.addEventListener('click', () => switchAppMode('teleprompter'));
+appModeNotes.addEventListener('click', () => switchAppMode('notes'));
+
+// ══════════════════════════════
+//  TELEPROMPTER
+// ══════════════════════════════
+const DEFAULT_SCRIPT = `Hey, I'm Yash.   ///   I'm a Product Associate at a stealth startup, building voice agents.   ///   Getting an AI to hold a real conversation is hard, but most of that's a language problem.   ///   Getting an AI to actually do work inside someone's pricing system or their ERP, where the output is a dollar amount, not a sentence, is a different kind of hard.   ///   Which is why InstaLILY caught me.`;
+
+const ticker = document.getElementById('ticker');
+const viewport = document.getElementById('viewport');
+const playBtn = document.getElementById('playBtn');
+const restartBtn = document.getElementById('restartBtn');
+const loadScriptBtn = document.getElementById('loadScriptBtn');
+const scrollHBtn = document.getElementById('scrollHBtn');
+const scrollVBtn = document.getElementById('scrollVBtn');
+const speedInput = document.getElementById('speed');
+const speedValEl = document.getElementById('speedVal');
+const sizeInput = document.getElementById('size');
+const scriptInput = document.getElementById('script-input');
+const statusEl = document.getElementById('status');
+const ctBadge = document.getElementById('ct-badge');
+
+let scrollDir = 'horizontal';
+let position = 0;
+let speed = 120;
+let playing = false;
+let lastT = null;
+let contentSize = 0;
+let viewportSize = 0;
+
+function measure() {
+  if (scrollDir === 'horizontal') { contentSize = ticker.scrollWidth; viewportSize = viewport.clientWidth; }
+  else { contentSize = ticker.scrollHeight; viewportSize = viewport.clientHeight; }
+}
+function setScript(text) {
+  while (ticker.firstChild) ticker.removeChild(ticker.firstChild);
+  if (scrollDir === 'horizontal') {
+    ticker.appendChild(document.createTextNode(text));
+  } else {
+    for (const part of text.split(/\s*\/\/\/\s*/)) {
+      if (!part.trim()) continue;
+      const p = document.createElement('p');
+      p.textContent = part;
+      ticker.appendChild(p);
+    }
+  }
+  measure(); resetPosition();
+}
+function resetPosition() { position = 0; applyTransform(); }
+function applyTransform() {
+  ticker.style.transform = scrollDir === 'horizontal' ? `translateX(${position}px)` : `translateY(${position}px)`;
+}
+function tick(t) {
+  if (!playing) { lastT = null; return; }
+  if (lastT == null) lastT = t;
+  position -= speed * ((t - lastT) / 1000);
+  lastT = t;
+  if (-position > contentSize + viewportSize) position = 0;
+  applyTransform();
+  requestAnimationFrame(tick);
+}
+function play() {
+  if (playing) return;
+  playing = true; statusEl.textContent = 'PLAYING'; statusEl.classList.remove('paused');
+  playBtn.textContent = 'Pause'; requestAnimationFrame(tick);
+}
+function pause() {
+  playing = false; statusEl.textContent = 'PAUSED'; statusEl.classList.add('paused');
+  playBtn.textContent = 'Play';
+}
+function toggle() { playing ? pause() : play(); }
+function setScrollDir(d) {
+  if (d === scrollDir) return;
+  scrollDir = d; pause();
+  document.body.classList.toggle('scroll-horizontal', d === 'horizontal');
+  document.body.classList.toggle('scroll-vertical', d === 'vertical');
+  scrollHBtn.classList.toggle('active', d === 'horizontal');
+  scrollVBtn.classList.toggle('active', d === 'vertical');
+  setScript(scriptInput.value.trim() || DEFAULT_SCRIPT);
+}
+
+playBtn.addEventListener('click', toggle);
+restartBtn.addEventListener('click', resetPosition);
+loadScriptBtn.addEventListener('click', () => { const t = scriptInput.value.trim(); if (t) setScript(t); });
+scrollHBtn.addEventListener('click', () => setScrollDir('horizontal'));
+scrollVBtn.addEventListener('click', () => setScrollDir('vertical'));
+speedInput.addEventListener('input', e => { speed = parseInt(e.target.value,10); speedValEl.textContent = speed; });
+sizeInput.addEventListener('input', e => { ticker.style.fontSize = e.target.value + 'px'; measure(); });
+window.addEventListener('resize', () => { if (appMode === 'teleprompter') measure(); });
+
+// ══════════════════════════════
+//  STICKY NOTES
+// ══════════════════════════════
+const addStickyBtn = document.getElementById('addStickyBtn');
+const colorPicker = document.getElementById('colorPicker');
+const clearAllNotesBtn = document.getElementById('clearAllNotesBtn');
+
+function getStickyNotes() {
+  try { return JSON.parse(localStorage.getItem('sticky_notes')) || []; } catch { return []; }
+}
+function saveStickyNotes(notes) { localStorage.setItem('sticky_notes', JSON.stringify(notes)); }
+
+function createStickyEl(note, idx) {
+  const el = document.createElement('div');
+  el.className = 'sticky-note';
+  el.style.left = note.x + 'px';
+  el.style.top = note.y + 'px';
+  el.style.width = (note.w || 240) + 'px';
+  el.style.minHeight = (note.h || 120) + 'px';
+  el.style.background = note.color;
+  el.style.color = '#fff';
+
+  const header = document.createElement('div');
+  header.className = 'note-header';
+  const title = document.createElement('input');
+  title.className = 'note-title';
+  title.type = 'text';
+  title.value = note.title || 'Note';
+  title.addEventListener('input', () => { updateStickyField(idx, 'title', title.value); });
+  const del = document.createElement('button');
+  del.className = 'note-del';
+  del.textContent = '\u00d7';
+  del.addEventListener('click', () => { deleteSticky(idx); });
+  header.appendChild(title);
+  header.appendChild(del);
+
+  const body = document.createElement('textarea');
+  body.className = 'note-body';
+  body.value = note.text || '';
+  body.placeholder = 'Type here...';
+  body.addEventListener('input', () => { updateStickyField(idx, 'text', body.value); });
+
+  const resize = document.createElement('div');
+  resize.className = 'note-resize';
+
+  el.appendChild(header);
+  el.appendChild(body);
+  el.appendChild(resize);
+
+  // Drag
+  let dragging = false, dx, dy;
+  header.addEventListener('mousedown', (e) => {
+    if (e.target === title || e.target === del) return;
+    dragging = true; dx = e.clientX - el.offsetLeft; dy = e.clientY - el.offsetTop;
+    el.style.zIndex = 100;
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    el.style.left = (e.clientX - dx) + 'px';
+    el.style.top = (e.clientY - dy) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; el.style.zIndex = '';
+    updateStickyField(idx, 'x', parseInt(el.style.left));
+    updateStickyField(idx, 'y', parseInt(el.style.top));
+  });
+
+  // Resize
+  let resizing = false, rw, rh, rx, ry;
+  resize.addEventListener('mousedown', (e) => {
+    e.stopPropagation(); resizing = true;
+    rw = el.offsetWidth; rh = el.offsetHeight; rx = e.clientX; ry = e.clientY;
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!resizing) return;
+    el.style.width = Math.max(160, rw + (e.clientX - rx)) + 'px';
+    el.style.minHeight = Math.max(80, rh + (e.clientY - ry)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    updateStickyField(idx, 'w', el.offsetWidth);
+    updateStickyField(idx, 'h', el.offsetHeight);
+  });
+
+  return el;
+}
+
+function renderStickies() {
+  while (notesView.firstChild) notesView.removeChild(notesView.firstChild);
+  getStickyNotes().forEach((n, i) => notesView.appendChild(createStickyEl(n, i)));
+}
+function updateStickyField(idx, field, val) {
+  const notes = getStickyNotes();
+  if (notes[idx]) { notes[idx][field] = val; saveStickyNotes(notes); }
+}
+function deleteSticky(idx) {
+  const notes = getStickyNotes();
+  notes.splice(idx, 1); saveStickyNotes(notes); renderStickies();
+}
+
+addStickyBtn.addEventListener('click', () => {
+  const notes = getStickyNotes();
+  const offset = notes.length * 25;
+  notes.push({ title: 'Note ' + (notes.length+1), text: '', color: colorPicker.value, x: 30+offset, y: 30+offset, w: 240, h: 150 });
+  saveStickyNotes(notes); renderStickies();
+});
+clearAllNotesBtn.addEventListener('click', () => {
+  if (!confirm('Delete all notes?')) return;
+  saveStickyNotes([]); renderStickies();
+});
+
+// ══════════════════════════════
+//  ELECTRON IPC
+// ══════════════════════════════
+if (window.electronAPI) {
+  window.electronAPI.onTogglePlay(toggle);
+  window.electronAPI.onRestart(resetPosition);
+  window.electronAPI.onSpeedChange((delta) => {
+    speed = Math.max(20, Math.min(400, speed + delta));
+    speedInput.value = speed; speedValEl.textContent = speed;
+  });
+  window.electronAPI.onToggleControls(() => {
+    tpControls.classList.toggle('hidden');
+  });
+  window.electronAPI.onClickThroughChanged((isThrough) => {
+    ctBadge.textContent = isThrough ? 'CLICK-THROUGH' : 'INTERACTIVE';
+    ctBadge.className = isThrough ? 'through' : 'interactive';
+  });
+}
+
+// ══════════════════════════════
+//  HOVER-BASED CLICK-THROUGH
+//  Controls stay interactive even in click-through mode
+// ══════════════════════════════
+if (window.electronAPI) {
+  const interactiveZones = [
+    document.getElementById('mode-bar'),
+    tpControls,
+    notesToolbar,
+    notesView,
+  ];
+  for (const zone of interactiveZones) {
+    zone.addEventListener('mouseenter', () => {
+      window.electronAPI.setIgnoreMouse(false);
+    });
+    zone.addEventListener('mouseleave', () => {
+      window.electronAPI.setIgnoreMouse(true);
+    });
+  }
+}
+
+// Init
+scriptInput.value = DEFAULT_SCRIPT;
+setScript(DEFAULT_SCRIPT);
+</script>
+</body>
+</html>
