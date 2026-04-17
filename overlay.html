@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Float Overlay</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Space Grotesk', -apple-system, system-ui, sans-serif;
+  }
+
+  #overlay-viewport {
+    position: fixed;
+    bottom: 60px;
+    left: 0; right: 0;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  #overlay-ticker {
+    white-space: nowrap;
+    padding-left: 100vw;
+    font-size: 48px;
+    font-weight: 700;
+    color: #fff;
+    will-change: transform;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.6), 0 0 40px rgba(0,0,0,0.3);
+  }
+
+  /* Focus line */
+  #focus-line {
+    position: fixed;
+    left: 50%;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: rgba(255,107,74,0.3);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="focus-line"></div>
+<div id="overlay-viewport">
+  <div id="overlay-ticker"></div>
+</div>
+
+<script>
+const ticker = document.getElementById('overlay-ticker');
+const viewport = document.getElementById('overlay-viewport');
+let position = 0;
+let speed = 120;
+let playing = false;
+let lastT = null;
+let fontSize = 48;
+
+function tick(t) {
+  if (!playing) { lastT = null; return; }
+  if (lastT === null) lastT = t;
+  position -= speed * ((t - lastT) / 1000);
+  lastT = t;
+  if (-position > ticker.scrollWidth + viewport.clientWidth) position = 0;
+  ticker.style.transform = 'translateX(' + position + 'px)';
+  requestAnimationFrame(tick);
+}
+
+if (window.overlayAPI) {
+  window.overlayAPI.onUpdate((data) => {
+    if (data.type === 'script') {
+      while (ticker.firstChild) ticker.removeChild(ticker.firstChild);
+      ticker.appendChild(document.createTextNode(data.text));
+      position = 0;
+    }
+    else if (data.type === 'play') {
+      playing = true;
+      requestAnimationFrame(tick);
+    }
+    else if (data.type === 'pause') {
+      playing = false;
+    }
+    else if (data.type === 'restart') {
+      position = 0;
+      ticker.style.transform = 'translateX(0)';
+    }
+    else if (data.type === 'speed') {
+      speed = data.value;
+    }
+    else if (data.type === 'fontSize') {
+      ticker.style.fontSize = data.value + 'px';
+      viewport.style.height = (data.value + 30) + 'px';
+    }
+    else if (data.type === 'position') {
+      // sync: top, center, bottom
+      viewport.style.top = data.top || '';
+      viewport.style.bottom = data.bottom || '60px';
+    }
+  });
+}
+</script>
+</body>
+</html>

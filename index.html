@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Teleprompter Overlay</title>
+<title>Teleprompter + Notes</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
@@ -10,348 +10,511 @@
   html, body {
     height: 100%;
     background: transparent;
-    color: #fff;
-    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    color: #2d2b29;
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     overflow: hidden;
   }
-  body {
-    display: flex;
-    flex-direction: column;
-    -webkit-app-region: drag;
-    border: 2px solid rgba(0,0,0,0.08);
-    border-radius: 14px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
-    overflow: hidden;
-  }
+  body { display: flex; flex-direction: column; }
 
-  /* ── Mode bar (warm cream) ── */
-  #mode-bar {
+  /* ── Pill (collapsed state) ── */
+  #pill {
     display: flex; align-items: center; gap: 6px;
-    padding: 6px 12px;
-    background: #faf9f7;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    padding: 8px 14px; margin: 2px auto;
+    background: #1a1a1a; border-radius: 26px;
+    width: 180px; height: 48px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    cursor: default; user-select: none;
+    -webkit-app-region: drag;
+  }
+  #pill.hidden { display: none; }
+  .pill-logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #ff6b4a, #ff8a6a);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(255,107,74,0.3);
+  }
+  .pill-logo svg { width: 16px; height: 16px; }
+  .pill-btn {
+    flex: 1; background: #4a9eff; border: none; border-radius: 20px;
+    padding: 6px 14px; color: #fff; font-family: inherit;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    -webkit-app-region: no-drag; transition: background 0.15s;
+  }
+  .pill-btn:hover { background: #3a8eef; }
+  .pill-close {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); border: none;
+    color: rgba(255,255,255,0.5); font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-app-region: no-drag; transition: all 0.15s; flex-shrink: 0;
+  }
+  .pill-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+  /* ── Full app (expanded state) ── */
+  #full-app {
+    display: none; flex-direction: column;
+    flex: 1; width: 100%; height: 100%;
+    background: transparent; border-radius: 14px;
+    overflow: hidden;
+  }
+  #full-app.visible { display: flex; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,107,74,0.25); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,107,74,0.45); }
+
+  /* ── Mode toggle bar ── */
+  #mode-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #fff;
+    border-bottom: 1px solid #ece9e4;
     z-index: 20;
-    -webkit-app-region: no-drag;
+    font-size: 13px;
   }
   #mode-bar button {
-    background: #fff;
-    color: #2d2b29;
-    border: 1px solid rgba(0,0,0,0.08);
-    padding: 5px 14px;
+    background: #f5f3ef;
+    color: #6b6966;
+    border: none;
+    padding: 7px 20px;
     border-radius: 8px;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     font-family: inherit;
     transition: all 0.15s ease;
-    letter-spacing: 0.02em;
+    letter-spacing: -0.01em;
   }
   #mode-bar button:hover {
-    background: #f0efed;
-    border-color: rgba(0,0,0,0.12);
-    color: #1a1a1a;
+    background: #ece9e4;
+    color: #2d2b29;
   }
   #mode-bar button.active {
     background: #ff6b4a;
-    border-color: #ff6b4a;
     color: #fff;
     border-radius: 20px;
-    box-shadow: 0 2px 8px rgba(255,107,74,0.25);
+    box-shadow: none;
   }
   #mode-bar .spacer { flex: 1; }
+  #mode-bar .share-group { display: flex; gap: 6px; }
 
-  /* ── Click-through badge ── */
-  #ct-badge {
-    font-size: 9px;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-weight: 600;
-    pointer-events: none;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    transition: all 0.15s ease;
-  }
-  #ct-badge.through {
-    background: #e6f9ec;
-    color: #22a352;
-    border: 1px solid rgba(34,163,82,0.15);
-  }
-  #ct-badge.interactive {
-    background: #fce8e6;
-    color: #d93025;
-    border: 1px solid rgba(217,48,37,0.15);
-  }
-
-  /* ══════════════════════════════
-     TELEPROMPTER
-     ══════════════════════════════ */
-  #teleprompter-view { flex: 1; display: flex; flex-direction: column; }
+  /* ══════════════════════════════════════════
+     TELEPROMPTER MODE
+     ══════════════════════════════════════════ */
+  #teleprompter-view { flex: 1; display: flex; flex-direction: column; z-index: 1; min-height: 0; overflow: hidden; }
   #teleprompter-view.hidden { display: none; }
 
-  #viewport { flex: 1; position: relative; overflow: hidden; -webkit-app-region: drag; }
+  #viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: transparent;
+    min-height: 0;
+  }
 
+  /* Horizontal */
   body.scroll-horizontal #viewport { display: flex; align-items: center; }
   body.scroll-horizontal #ticker { display: block; white-space: nowrap; padding-left: 100vw; }
   body.scroll-horizontal #viewport::before,
   body.scroll-horizontal #viewport::after {
-    content: ""; position: absolute; top: 0; bottom: 0; width: 80px;
+    content: ""; position: absolute; top: 0; bottom: 0; width: 160px;
     pointer-events: none; z-index: 2;
   }
   body.scroll-horizontal #viewport::before { left: 0; background: none; }
-  body.scroll-horizontal #viewport::after { right: 0; background: none; }
+  body.scroll-horizontal #viewport::after  { right: 0; background: none; }
   body.scroll-horizontal #focus-line { left: 50%; top: 0; bottom: 0; width: 2px; }
 
-  body.scroll-vertical #viewport { display: block; padding: 0 6vw; }
+  /* Vertical */
+  body.scroll-vertical #viewport { display: block; padding: 0 8vw; }
   body.scroll-vertical #ticker {
-    display: block; white-space: normal; padding-top: 50vh; padding-bottom: 60vh; text-align: center;
+    display: block; white-space: normal;
+    padding-top: 50vh; padding-bottom: 60vh; text-align: center;
   }
   body.scroll-vertical #ticker p { margin-bottom: 0.6em; }
   body.scroll-vertical #viewport::before,
   body.scroll-vertical #viewport::after {
-    content: ""; position: absolute; left: 0; right: 0; height: 15vh;
+    content: ""; position: absolute; left: 0; right: 0; height: 20vh;
     pointer-events: none; z-index: 2;
   }
   body.scroll-vertical #viewport::before { top: 0; background: none; }
-  body.scroll-vertical #viewport::after { bottom: 0; background: none; }
+  body.scroll-vertical #viewport::after  { bottom: 0; background: none; }
   body.scroll-vertical #focus-line { top: 50%; left: 0; right: 0; height: 2px; }
 
   #ticker {
-    font-size: 48px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;
+    font-size: 64px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.3;
     will-change: transform;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.7), 0 0 2px rgba(0,0,0,0.5);
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.6);
   }
   #focus-line {
-    position: absolute;
-    background: linear-gradient(90deg, transparent, #ff6b4a, #ff6b4a, transparent);
-    z-index: 3;
-    pointer-events: none;
+    position: absolute; background: #ff6b4a; opacity: 0.4; z-index: 3; pointer-events: none;
   }
 
-  /* Teleprompter controls (cream panel) */
+  /* Teleprompter controls */
   #tp-controls {
-    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-    background: #faf9f7;
-    border-top: 1px solid rgba(0,0,0,0.06);
-    font-size: 11px; color: #2d2b29;
-    flex-wrap: wrap; z-index: 10; -webkit-app-region: no-drag;
+    display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    background: #fff;
+    border-top: 1px solid #ece9e4;
+    font-size: 12px; color: #999;
+    flex-wrap: wrap; z-index: 10;
+    transition: all 0.15s ease;
+    -webkit-app-region: no-drag;
+    flex-shrink: 0;
   }
   #tp-controls.hidden { display: none; }
-  #tp-controls .group { display: flex; align-items: center; gap: 5px; }
+  #tp-controls .group { display: flex; align-items: center; gap: 6px; }
   #tp-controls button {
-    background: #fff;
-    color: #2d2b29;
-    border: 1px solid rgba(0,0,0,0.08);
-    padding: 4px 10px;
-    border-radius: 8px;
-    font-size: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
+    background: #f5f3ef;
+    color: #5a5855;
+    border: none;
+    padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    font-family: inherit; font-weight: 600;
     transition: all 0.15s ease;
   }
   #tp-controls button:hover {
-    background: #f0efed;
-    border-color: rgba(0,0,0,0.12);
-    color: #1a1a1a;
+    background: #ece9e4;
+    color: #2d2b29;
   }
   #tp-controls button.active {
     background: #ff6b4a;
-    border-color: #ff6b4a;
     color: #fff;
-    box-shadow: 0 2px 8px rgba(255,107,74,0.2);
   }
+
+  /* Range slider */
   #tp-controls input[type="range"] {
-    width: 80px;
-    accent-color: #ff6b4a;
+    width: 120px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #e0ddd8;
+    border-radius: 2px;
+    outline: none;
   }
+  #tp-controls input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #ff6b4a;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(255,107,74,0.3);
+    transition: box-shadow 0.15s ease;
+  }
+  #tp-controls input[type="range"]::-webkit-slider-thumb:hover {
+    box-shadow: 0 2px 8px rgba(255,107,74,0.45);
+  }
+
   #tp-controls input[type="number"] {
-    background: #fff;
-    color: #1a1a1a;
-    border: 1px solid rgba(0,0,0,0.08);
-    padding: 3px 6px;
-    width: 48px;
-    border-radius: 8px;
-    font-size: 10px;
+    background: #f0eeea;
+    color: #2d2b29;
+    border: 1px solid #e0ddd8;
+    padding: 5px 8px; width: 58px; border-radius: 8px; font-size: 12px;
     font-family: inherit;
     transition: border-color 0.15s ease;
   }
   #tp-controls input[type="number"]:focus {
     border-color: #ff6b4a;
     outline: none;
-    box-shadow: 0 0 0 2px rgba(255,107,74,0.15);
+    box-shadow: 0 0 0 2px rgba(255,107,74,0.12);
   }
   #tp-controls textarea {
-    flex: 1; min-width: 150px;
-    background: #fff;
-    color: #1a1a1a;
-    border: 1px solid rgba(0,0,0,0.08);
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 10px;
-    font-family: inherit;
-    resize: vertical;
-    height: 28px;
+    flex: 1; min-width: 250px;
+    background: #f0eeea;
+    color: #2d2b29;
+    border: 1px solid #e0ddd8;
+    padding: 7px 10px; border-radius: 8px;
+    font-size: 12px; font-family: inherit; resize: vertical; height: 32px;
     transition: border-color 0.15s ease;
   }
   #tp-controls textarea:focus {
     border-color: #ff6b4a;
     outline: none;
-    box-shadow: 0 0 0 2px rgba(255,107,74,0.15);
+    box-shadow: 0 0 0 2px rgba(255,107,74,0.12);
   }
   #tp-controls textarea::placeholder {
-    color: #999;
+    color: #bbb;
   }
 
+  /* Status pill badges */
   .status {
-    font-weight: 600;
-    font-size: 10px;
-    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
     border-radius: 20px;
-    letter-spacing: 0.04em;
-  }
-  .status:not(.paused) {
-    color: #22a352;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
     background: #e6f9ec;
-    border: 1px solid rgba(34,163,82,0.15);
+    color: #22a352;
+    border: none;
+    transition: all 0.15s ease;
   }
   .status.paused {
-    color: #d93025;
     background: #fce8e6;
-    border: 1px solid rgba(217,48,37,0.15);
+    color: #d93025;
   }
   .hint {
     color: #999;
-    font-size: 9px;
-    letter-spacing: 0.02em;
+    font-size: 10px;
+    letter-spacing: 0.01em;
   }
 
-  /* ══════════════════════════════
-     STICKY NOTES
-     ══════════════════════════════ */
-  #notes-view { flex: 1; position: relative; overflow: auto; padding: 16px; -webkit-app-region: no-drag; background: #faf9f7; }
+  body.mirror-h #viewport { transform: scaleX(-1); }
+  body.mirror-v #viewport { transform: scaleY(-1); }
+  body.mirror-h.mirror-v #viewport { transform: scale(-1,-1); }
+
+  /* ══════════════════════════════════════════
+     STICKY NOTES MODE
+     ══════════════════════════════════════════ */
+  #notes-view {
+    flex: 1; position: relative; z-index: 1; overflow: auto;
+    padding: 20px;
+    background: transparent;
+    -webkit-app-region: no-drag;
+  }
   #notes-view.hidden { display: none; }
+  .sticky-note { -webkit-app-region: no-drag; }
+  .sticky-note .note-header { -webkit-app-region: no-drag; }
 
   .sticky-note {
     position: absolute;
-    width: 240px;
-    min-height: 120px;
+    width: 260px;
+    min-height: 140px;
     border-radius: 12px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
-    font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    font-size: 14px;
     cursor: default;
     overflow: hidden;
     border: none;
-    border-left: 4px solid rgba(0,0,0,0.1);
-    transition: box-shadow 0.15s ease;
+    border-left: 4px solid #ff6b4a;
+    background: #fff;
+    transition: box-shadow 0.15s ease, transform 0.1s ease;
   }
   .sticky-note:hover {
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
   }
   .sticky-note .note-header {
-    display: flex; align-items: center; padding: 7px 10px; cursor: grab;
-    gap: 6px; font-size: 11px; font-weight: 600;
-    background: rgba(0,0,0,0.04);
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: grab;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    background: transparent;
     user-select: none;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid #f0eeea;
+    color: #2d2b29;
   }
   .sticky-note .note-header:active { cursor: grabbing; }
   .sticky-note .note-title {
-    flex: 1; background: none; border: none; color: #2d2b29 !important;
-    font-size: 11px; font-weight: 600; font-family: inherit; outline: none;
+    flex: 1;
+    background: none;
+    border: none;
+    color: #2d2b29;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    outline: none;
+    letter-spacing: -0.01em;
   }
   .sticky-note .note-del {
-    background: none; border: none; color: #2d2b29 !important; cursor: pointer;
-    font-size: 14px; opacity: 0.4; padding: 0 2px;
+    background: none; border: none; color: #999; cursor: pointer;
+    font-size: 16px; opacity: 0.5; padding: 0 2px;
     transition: opacity 0.15s ease;
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
   }
-  .sticky-note .note-del:hover { opacity: 0.9; }
+  .sticky-note .note-del:hover { opacity: 1; background: #f5f3ef; color: #d93025; }
   .sticky-note .note-body {
-    flex: 1; padding: 10px; background: none; border: none; color: #2d2b29 !important;
-    font-size: 13px; font-family: inherit; resize: none; outline: none;
-    min-height: 80px; line-height: 1.5;
+    flex: 1;
+    padding: 12px;
+    background: none;
+    border: none;
+    color: #2d2b29;
+    font-size: 13px;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    min-height: 100px;
+    line-height: 1.6;
+  }
+  .sticky-note .note-body::placeholder {
+    color: #bbb;
   }
   .sticky-note .note-resize {
-    position: absolute; bottom: 0; right: 0; width: 16px; height: 16px;
-    cursor: nwse-resize; opacity: 0.25;
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 18px; height: 18px;
+    cursor: nwse-resize;
+    opacity: 0.15;
     transition: opacity 0.15s ease;
   }
-  .sticky-note:hover .note-resize { opacity: 0.5; }
+  .sticky-note:hover .note-resize { opacity: 0.35; }
   .sticky-note .note-resize::after {
-    content: ""; position: absolute; bottom: 3px; right: 3px;
-    width: 7px; height: 7px;
-    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
-    border-radius: 1px;
+    content: ""; position: absolute; bottom: 4px; right: 4px;
+    width: 8px; height: 8px;
+    border-right: 2px solid #bbb;
+    border-bottom: 2px solid #bbb;
+    border-radius: 0 0 2px 0;
   }
 
-  /* Notes toolbar (cream panel) */
-  #notes-toolbar {
-    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-    background: #faf9f7;
-    border-top: 1px solid rgba(0,0,0,0.06);
+  /* Web note */
+  .web-note-url {
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-bottom: 1px solid #eee;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
     font-size: 11px;
+    outline: none;
+    background: rgba(255,255,255,0.5);
     color: #2d2b29;
-    z-index: 10;
+  }
+  .web-note-url:focus { border-color: #4a9eff; }
+  .web-note-iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+    min-height: 200px;
+    border-radius: 0 0 10px 10px;
+    background: #fff;
+  }
+
+  /* Claude note */
+  .claude-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    min-height: 120px;
+    max-height: 300px;
+  }
+  .claude-msg {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+  }
+  .claude-msg.user {
+    background: #e8f0fe;
+    text-align: right;
+  }
+  .claude-msg.assistant {
+    background: #f0f0f0;
+  }
+  .claude-input-row {
+    display: flex;
+    border-top: 1px solid #eee;
+  }
+  .claude-input {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-size: 12px;
+    outline: none;
+    background: transparent;
+    color: #2d2b29;
+  }
+  .claude-send {
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-left: 1px solid #eee;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a9eff;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .claude-send:hover { background: #f0f7ff; }
+
+  /* Notes toolbar */
+  #notes-toolbar {
+    display: flex; align-items: center; gap: 12px; padding: 10px 18px;
+    background: #fff;
+    border-top: 1px solid #ece9e4;
     -webkit-app-region: no-drag;
+    font-size: 12px; color: #6b6966; z-index: 10;
   }
   #notes-toolbar.hidden { display: none; }
   #notes-toolbar button {
-    background: #fff;
-    color: #2d2b29;
-    border: 1px solid rgba(0,0,0,0.08);
-    padding: 5px 12px;
-    border-radius: 8px;
-    font-size: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
+    background: #f5f3ef;
+    color: #5a5855;
+    border: none;
+    padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    font-family: inherit; font-weight: 600;
     transition: all 0.15s ease;
   }
   #notes-toolbar button:hover {
-    background: #f0efed;
-    border-color: rgba(0,0,0,0.12);
-    color: #1a1a1a;
+    background: #ece9e4;
+    color: #2d2b29;
   }
   #notes-toolbar select {
-    background: #fff;
+    background: #f0eeea;
     color: #2d2b29;
-    border: 1px solid rgba(0,0,0,0.08);
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 10px;
+    border: 1px solid #e0ddd8;
+    padding: 5px 10px; border-radius: 8px; font-size: 12px;
     font-family: inherit;
-    transition: border-color 0.15s ease;
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
   #notes-toolbar select:focus {
     border-color: #ff6b4a;
     outline: none;
-    box-shadow: 0 0 0 2px rgba(255,107,74,0.15);
+  }
+  #notes-toolbar select option {
+    background: #fff;
+    color: #2d2b29;
   }
 
-  /* ── Scrollbar styling ── */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb {
-    background: rgba(0,0,0,0.1);
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0,0,0,0.2);
+  /* Duration value styling */
+  #durationVal {
+    color: #22a352 !important;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 2px 8px;
+    background: #e6f9ec;
+    border-radius: 12px;
+    border: none;
   }
 </style>
 </head>
 <body class="scroll-horizontal">
 
-<!-- ── Top bar ── -->
-<div id="mode-bar">
-  <button id="appModeTele" class="active">Teleprompter</button>
-  <button id="appModeNotes">Notes</button>
-  <span class="spacer"></span>
-  <span id="ct-badge" class="through">CLICK-THROUGH</span>
+<!-- ═══ PILL (collapsed) ═══ -->
+<div id="pill">
+  <div class="pill-logo"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 4h12a2 2 0 0 1 0 4H6m0-4v16m0-12h9a2 2 0 0 1 0 4H6" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="6" r="1.5" fill="#fff" opacity="0.5"><animate attributeName="cy" values="6;4;6" dur="2s" repeatCount="indefinite"/></circle></svg></div>
+  <button class="pill-btn" id="pillOpen">Float</button>
+  <button class="pill-close" id="pillQuit">&times;</button>
 </div>
 
-<!-- ── Teleprompter ── -->
+<!-- ═══ FULL APP (expanded) ═══ -->
+<div id="full-app">
+
+
+<!-- ── Top bar: mode switch + screen share ── -->
+<div id="mode-bar">
+  <button id="appModeTele" class="active">Teleprompter</button>
+  <button id="appModeNotes">Sticky Notes</button>
+  <span class="spacer"></span>
+  <div class="share-group">
+    <button id="hideBtn" style="opacity:0.5">Hide</button>
+  </div>
+</div>
+
+<!-- ── Teleprompter view ── -->
 <div id="teleprompter-view">
   <div id="viewport">
     <div id="focus-line"></div>
@@ -364,43 +527,80 @@
     </div>
     <div class="group">
       <button id="playBtn">Play</button>
-      <button id="restartBtn">Rst</button>
+      <button id="restartBtn">Restart</button>
       <span id="status" class="status paused">PAUSED</span>
     </div>
     <div class="group">
       <input type="range" id="speed" min="20" max="400" value="120" />
       <span id="speedVal">120</span>
+      <span id="durationVal">~0:00</span>
     </div>
     <div class="group">
-      <input type="number" id="size" min="24" max="200" value="48" />px
+      <input type="number" id="size" min="24" max="200" value="64" />px
     </div>
-    <textarea id="script-input" placeholder="Paste script, click Load"></textarea>
+    <div class="group">
+      <button id="mirrorHBtn">Flip H</button>
+      <button id="mirrorVBtn">Flip V</button>
+    </div>
+    <textarea id="script-input" placeholder="Paste script here, press Enter or click Load"></textarea>
     <button id="loadScriptBtn">Load</button>
-    <span class="hint">Cmd+Shift: T=click P=play R=restart H=controls Q=quit</span>
+    <span class="hint">Space=play  |  Up/Down=speed  |  R=restart  |  C=controls  |  Cmd+Shift+T=hide  |  Cmd+Shift+Q=quit</span>
   </div>
 </div>
 
-<!-- ── Sticky Notes ── -->
+<!-- ── Sticky Notes view ── -->
 <div id="notes-view" class="hidden"></div>
 <div id="notes-toolbar" class="hidden">
   <button id="addStickyBtn">+ Note</button>
+  <button id="addWebBtn">+ Web</button>
+  <button id="addClaudeBtn">+ Claude</button>
+  <span>Color:</span>
   <select id="colorPicker">
+    <option value="#ffe8d6">Peach</option>
     <option value="#e8dff5">Lavender</option>
     <option value="#d6f5e8">Mint</option>
-    <option value="#ffe8d6">Peach</option>
     <option value="#d6e8f5">Sky</option>
     <option value="#f5f0d6">Lemon</option>
     <option value="#f5d6e0">Rose</option>
   </select>
-  <button id="clearAllNotesBtn">Clear</button>
-  <span class="hint" style="margin-left:auto">Drag to move / resize</span>
+  <button id="clearAllNotesBtn">Clear All</button>
+  <button id="resetApiKeyBtn">Reset API Key</button>
+  <span>Opacity:</span>
+  <input type="range" id="noteOpacity" min="0" max="100" value="85" style="width:80px;accent-color:#ff6b4a">
+  <span id="noteOpacityVal">85%</span>
+  <span class="hint" style="margin-left:auto">Drag to move  |  Drag corner to resize  |  Notes auto-save</span>
 </div>
 
+</div><!-- /full-app -->
+
 <script>
-// ══════════════════════════════
-//  APP MODE
-// ══════════════════════════════
-let appMode = 'teleprompter';
+// ══════════════════════════════════════════
+//  PILL EXPAND / COLLAPSE
+// ══════════════════════════════════════════
+const pillEl = document.getElementById('pill');
+const fullApp = document.getElementById('full-app');
+let isExpanded = false;
+
+function expandApp() {
+  isExpanded = true;
+  pillEl.classList.add('hidden');
+  fullApp.classList.add('visible');
+  if (window.electronAPI) window.electronAPI.expand();
+}
+function collapseApp() {
+  isExpanded = false;
+  fullApp.classList.remove('visible');
+  pillEl.classList.remove('hidden');
+  if (window.electronAPI) window.electronAPI.collapse();
+}
+
+document.getElementById('pillOpen').addEventListener('click', expandApp);
+document.getElementById('pillQuit').addEventListener('click', () => window.close());
+
+// ══════════════════════════════════════════
+//  APP MODE (Teleprompter vs Sticky Notes)
+// ══════════════════════════════════════════
+let appMode = 'teleprompter'; // or 'notes'
 const appModeTele = document.getElementById('appModeTele');
 const appModeNotes = document.getElementById('appModeNotes');
 const teleView = document.getElementById('teleprompter-view');
@@ -416,16 +616,18 @@ function switchAppMode(m) {
   tpControls.classList.toggle('hidden', m !== 'teleprompter');
   notesView.classList.toggle('hidden', m !== 'notes');
   notesToolbar.classList.toggle('hidden', m !== 'notes');
-  if (m === 'teleprompter') measure();
+  if (m === 'teleprompter') { measure(); }
   if (m === 'notes') { pause(); renderStickies(); }
 }
 appModeTele.addEventListener('click', () => switchAppMode('teleprompter'));
 appModeNotes.addEventListener('click', () => switchAppMode('notes'));
 
-// ══════════════════════════════
+// ══════════════════════════════════════════
+//  SCREEN CAPTURE (shared by both modes)
+// ══════════════════════════════════════════
 //  TELEPROMPTER
-// ══════════════════════════════
-const DEFAULT_SCRIPT = `Hey, I'm Yash.   ///   I'm a Product Associate at a stealth startup, building voice agents.   ///   Getting an AI to hold a real conversation is hard, but most of that's a language problem.   ///   Getting an AI to actually do work inside someone's pricing system or their ERP, where the output is a dollar amount, not a sentence, is a different kind of hard.   ///   Which is why InstaLILY caught me.`;
+// ══════════════════════════════════════════
+const DEFAULT_SCRIPT = `The best presenters never look like they are reading.   ///   They look like they are thinking out loud — like every word just arrived.   ///   That is what Float is for.   ///   Your script scrolls at your pace, invisible to everyone but you.   ///   No more glancing at a second monitor. No more losing your train of thought mid-sentence.   ///   Just you, your words, and the confidence of knowing exactly what comes next.   ///   The people who move rooms do not wing it. They prepare — then they make it look effortless.   ///   Float is how you get there.   ///   Paste your script. Hit play. Speak like you mean it.`;
 
 const ticker = document.getElementById('ticker');
 const viewport = document.getElementById('viewport');
@@ -434,12 +636,14 @@ const restartBtn = document.getElementById('restartBtn');
 const loadScriptBtn = document.getElementById('loadScriptBtn');
 const scrollHBtn = document.getElementById('scrollHBtn');
 const scrollVBtn = document.getElementById('scrollVBtn');
+const mirrorHBtn = document.getElementById('mirrorHBtn');
+const mirrorVBtn = document.getElementById('mirrorVBtn');
 const speedInput = document.getElementById('speed');
 const speedValEl = document.getElementById('speedVal');
+const durationVal = document.getElementById('durationVal');
 const sizeInput = document.getElementById('size');
 const scriptInput = document.getElementById('script-input');
 const statusEl = document.getElementById('status');
-const ctBadge = document.getElementById('ct-badge');
 
 let scrollDir = 'horizontal';
 let position = 0;
@@ -450,8 +654,21 @@ let contentSize = 0;
 let viewportSize = 0;
 
 function measure() {
-  if (scrollDir === 'horizontal') { contentSize = ticker.scrollWidth; viewportSize = viewport.clientWidth; }
-  else { contentSize = ticker.scrollHeight; viewportSize = viewport.clientHeight; }
+  if (scrollDir === 'horizontal') {
+    contentSize = ticker.scrollWidth;
+    viewportSize = viewport.clientWidth;
+  } else {
+    contentSize = ticker.scrollHeight;
+    viewportSize = viewport.clientHeight;
+  }
+  updateDuration();
+}
+function fmtTime(s) {
+  if (!isFinite(s) || s < 0) return '0:00';
+  return `${Math.floor(s/60)}:${Math.round(s%60).toString().padStart(2,'0')}`;
+}
+function updateDuration() {
+  durationVal.textContent = `~${fmtTime((contentSize + viewportSize) / (speed || 1))}`;
 }
 function setScript(text) {
   while (ticker.firstChild) ticker.removeChild(ticker.firstChild);
@@ -465,11 +682,13 @@ function setScript(text) {
       ticker.appendChild(p);
     }
   }
-  measure(); resetPosition();
+  measure();
+  resetPosition();
 }
 function resetPosition() { position = 0; applyTransform(); }
 function applyTransform() {
-  ticker.style.transform = scrollDir === 'horizontal' ? `translateX(${position}px)` : `translateY(${position}px)`;
+  ticker.style.transform = scrollDir === 'horizontal'
+    ? `translateX(${position}px)` : `translateY(${position}px)`;
 }
 function tick(t) {
   if (!playing) { lastT = null; return; }
@@ -482,11 +701,14 @@ function tick(t) {
 }
 function play() {
   if (playing) return;
-  playing = true; statusEl.textContent = 'PLAYING'; statusEl.classList.remove('paused');
-  playBtn.textContent = 'Pause'; requestAnimationFrame(tick);
+  playing = true;
+  statusEl.textContent = 'PLAYING'; statusEl.classList.remove('paused');
+  playBtn.textContent = 'Pause';
+  requestAnimationFrame(tick);
 }
 function pause() {
-  playing = false; statusEl.textContent = 'PAUSED'; statusEl.classList.add('paused');
+  playing = false;
+  statusEl.textContent = 'PAUSED'; statusEl.classList.add('paused');
   playBtn.textContent = 'Play';
 }
 function toggle() { playing ? pause() : play(); }
@@ -505,13 +727,33 @@ restartBtn.addEventListener('click', resetPosition);
 loadScriptBtn.addEventListener('click', () => { const t = scriptInput.value.trim(); if (t) setScript(t); });
 scrollHBtn.addEventListener('click', () => setScrollDir('horizontal'));
 scrollVBtn.addEventListener('click', () => setScrollDir('vertical'));
-speedInput.addEventListener('input', e => { speed = parseInt(e.target.value,10); speedValEl.textContent = speed; });
+mirrorHBtn.addEventListener('click', () => { document.body.classList.toggle('mirror-h'); mirrorHBtn.classList.toggle('active'); });
+mirrorVBtn.addEventListener('click', () => { document.body.classList.toggle('mirror-v'); mirrorVBtn.classList.toggle('active'); });
+speedInput.addEventListener('input', e => { speed = parseInt(e.target.value,10); speedValEl.textContent = speed; updateDuration(); });
 sizeInput.addEventListener('input', e => { ticker.style.fontSize = e.target.value + 'px'; measure(); });
 window.addEventListener('resize', () => { if (appMode === 'teleprompter') measure(); });
 
-// ══════════════════════════════
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if (appMode !== 'teleprompter') return;
+  if (e.code === 'Space') { e.preventDefault(); toggle(); }
+  else if (e.key === 'r' || e.key === 'R') resetPosition();
+  else if (e.key === 'ArrowUp') { speed = Math.min(400, speed+10); speedInput.value = speed; speedValEl.textContent = speed; updateDuration(); }
+  else if (e.key === 'ArrowDown') { speed = Math.max(20, speed-10); speedInput.value = speed; speedValEl.textContent = speed; updateDuration(); }
+  else if (e.key === 'c' || e.key === 'C') tpControls.classList.toggle('hidden');
+  else if (e.key === 'f' || e.key === 'F') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+});
+
+scriptInput.value = DEFAULT_SCRIPT;
+setScript(DEFAULT_SCRIPT);
+
+// ══════════════════════════════════════════
 //  STICKY NOTES
-// ══════════════════════════════
+// ══════════════════════════════════════════
+const COLORS = ['#ffe8d6','#e8dff5','#d6f5e8','#d6e8f5','#f5f0d6','#f5d6e0'];
 const addStickyBtn = document.getElementById('addStickyBtn');
 const colorPicker = document.getElementById('colorPicker');
 const clearAllNotesBtn = document.getElementById('clearAllNotesBtn');
@@ -526,31 +768,41 @@ function createStickyEl(note, idx) {
   el.className = 'sticky-note';
   el.style.left = note.x + 'px';
   el.style.top = note.y + 'px';
-  el.style.width = (note.w || 240) + 'px';
-  el.style.minHeight = (note.h || 120) + 'px';
-  el.style.background = note.color;
-  el.style.color = '#fff';
+  el.style.width = (note.w || 260) + 'px';
+  el.style.minHeight = (note.h || 140) + 'px';
+  const opVal = document.getElementById('noteOpacity').value / 100;
+  el.style.background = 'rgba(255,255,255,' + opVal + ')';
+  el.style.borderLeft = '4px solid ' + note.color;
+  el.style.color = '#2d2b29';
+  el.dataset.idx = idx;
+  el.dataset.regular = 'true';
 
+  // Header
   const header = document.createElement('div');
   header.className = 'note-header';
+
   const title = document.createElement('input');
   title.className = 'note-title';
   title.type = 'text';
   title.value = note.title || 'Note';
   title.addEventListener('input', () => { updateStickyField(idx, 'title', title.value); });
+
   const del = document.createElement('button');
   del.className = 'note-del';
   del.textContent = '\u00d7';
   del.addEventListener('click', () => { deleteSticky(idx); });
+
   header.appendChild(title);
   header.appendChild(del);
 
+  // Body
   const body = document.createElement('textarea');
   body.className = 'note-body';
   body.value = note.text || '';
-  body.placeholder = 'Type here...';
+  body.placeholder = 'Type your note...';
   body.addEventListener('input', () => { updateStickyField(idx, 'text', body.value); });
 
+  // Resize handle
   const resize = document.createElement('div');
   resize.className = 'note-resize';
 
@@ -558,11 +810,13 @@ function createStickyEl(note, idx) {
   el.appendChild(body);
   el.appendChild(resize);
 
-  // Drag
+  // ── Drag ──
   let dragging = false, dx, dy;
   header.addEventListener('mousedown', (e) => {
     if (e.target === title || e.target === del) return;
-    dragging = true; dx = e.clientX - el.offsetLeft; dy = e.clientY - el.offsetTop;
+    dragging = true;
+    dx = e.clientX - el.offsetLeft;
+    dy = e.clientY - el.offsetTop;
     el.style.zIndex = 100;
   });
   document.addEventListener('mousemove', (e) => {
@@ -572,21 +826,28 @@ function createStickyEl(note, idx) {
   });
   document.addEventListener('mouseup', () => {
     if (!dragging) return;
-    dragging = false; el.style.zIndex = '';
+    dragging = false;
+    el.style.zIndex = '';
     updateStickyField(idx, 'x', parseInt(el.style.left));
     updateStickyField(idx, 'y', parseInt(el.style.top));
   });
 
-  // Resize
+  // ── Resize ──
   let resizing = false, rw, rh, rx, ry;
   resize.addEventListener('mousedown', (e) => {
-    e.stopPropagation(); resizing = true;
-    rw = el.offsetWidth; rh = el.offsetHeight; rx = e.clientX; ry = e.clientY;
+    e.stopPropagation();
+    resizing = true;
+    rw = el.offsetWidth;
+    rh = el.offsetHeight;
+    rx = e.clientX;
+    ry = e.clientY;
   });
   document.addEventListener('mousemove', (e) => {
     if (!resizing) return;
-    el.style.width = Math.max(160, rw + (e.clientX - rx)) + 'px';
-    el.style.minHeight = Math.max(80, rh + (e.clientY - ry)) + 'px';
+    const nw = Math.max(180, rw + (e.clientX - rx));
+    const nh = Math.max(100, rh + (e.clientY - ry));
+    el.style.width = nw + 'px';
+    el.style.minHeight = nh + 'px';
   });
   document.addEventListener('mouseup', () => {
     if (!resizing) return;
@@ -595,76 +856,362 @@ function createStickyEl(note, idx) {
     updateStickyField(idx, 'h', el.offsetHeight);
   });
 
+  // Click-through: note is interactive on hover
+  if (window.electronAPI) {
+    el.addEventListener('mouseenter', () => window.electronAPI.setIgnoreMouse(false));
+    el.addEventListener('mouseleave', () => window.electronAPI.setIgnoreMouse(true));
+  }
+
   return el;
 }
 
 function renderStickies() {
-  while (notesView.firstChild) notesView.removeChild(notesView.firstChild);
-  getStickyNotes().forEach((n, i) => notesView.appendChild(createStickyEl(n, i)));
+  notesView.querySelectorAll('.sticky-note[data-regular]').forEach(el => el.remove());
+  const notes = getStickyNotes();
+  notes.forEach((n, i) => notesView.appendChild(createStickyEl(n, i)));
 }
+
 function updateStickyField(idx, field, val) {
   const notes = getStickyNotes();
   if (notes[idx]) { notes[idx][field] = val; saveStickyNotes(notes); }
 }
+
 function deleteSticky(idx) {
   const notes = getStickyNotes();
-  notes.splice(idx, 1); saveStickyNotes(notes); renderStickies();
+  notes.splice(idx, 1);
+  saveStickyNotes(notes);
+  renderStickies();
 }
 
 addStickyBtn.addEventListener('click', () => {
   const notes = getStickyNotes();
-  const offset = notes.length * 25;
-  notes.push({ title: 'Note ' + (notes.length+1), text: '', color: colorPicker.value, x: 30+offset, y: 30+offset, w: 240, h: 150 });
-  saveStickyNotes(notes); renderStickies();
-});
-clearAllNotesBtn.addEventListener('click', () => {
-  if (!confirm('Delete all notes?')) return;
-  saveStickyNotes([]); renderStickies();
+  const offset = notes.length * 30;
+  notes.push({
+    title: 'Note ' + (notes.length + 1),
+    text: '',
+    color: colorPicker.value,
+    x: 40 + offset,
+    y: 40 + offset,
+    w: 260,
+    h: 180,
+  });
+  saveStickyNotes(notes);
+  renderStickies();
 });
 
-// ══════════════════════════════
-//  ELECTRON IPC
-// ══════════════════════════════
+clearAllNotesBtn.addEventListener('click', () => {
+  if (!confirm('Delete all sticky notes?')) return;
+  saveStickyNotes([]);
+  renderStickies();
+});
+
+// ── Web Note (webview) ──
+document.getElementById('addWebBtn').addEventListener('click', () => {
+  const offset = document.querySelectorAll('.sticky-note').length * 30;
+  const el = document.createElement('div');
+  el.className = 'sticky-note';
+  el.style.left = (60 + offset) + 'px';
+  el.style.top = (60 + offset) + 'px';
+  el.style.width = '260px';
+  el.style.minHeight = '180px';
+  el.style.background = 'rgba(255,255,255,0.95)';
+  el.style.borderLeft = '4px solid #4a9eff';
+  el.style.color = '#2d2b29';
+
+  const header = document.createElement('div');
+  header.className = 'note-header';
+  const title = document.createElement('input');
+  title.className = 'note-title';
+  title.value = 'Web';
+  title.style.color = '#4a9eff';
+  const del = document.createElement('button');
+  del.className = 'note-del';
+  del.textContent = '\u00d7';
+  del.addEventListener('click', () => el.remove());
+  header.appendChild(title);
+  header.appendChild(del);
+
+  const urlInput = document.createElement('input');
+  urlInput.className = 'web-note-url';
+  urlInput.type = 'text';
+  urlInput.placeholder = 'URL + Enter';
+  urlInput.style.cssText = 'width:100%;padding:5px 8px;border:none;border-bottom:1px solid #eee;font-family:inherit;font-size:11px;outline:none;background:rgba(255,255,255,0.5);color:#2d2b29';
+
+  const wv = document.createElement('webview');
+  wv.style.cssText = 'flex:1;width:100%;min-height:120px;border-radius:0 0 10px 10px';
+  wv.src = 'about:blank';
+
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      let url = urlInput.value.trim();
+      if (url && !url.startsWith('http')) url = 'https://' + url;
+      wv.src = url;
+      title.value = url.replace(/^https?:\/\//, '').split('/')[0];
+    }
+  });
+
+  el.appendChild(header);
+  el.appendChild(urlInput);
+  el.appendChild(wv);
+
+  // Resize
+  const resize = document.createElement('div');
+  resize.className = 'note-resize';
+  el.appendChild(resize);
+  let resizing = false, rw, rh, rx, ry;
+  resize.addEventListener('mousedown', (e) => { e.stopPropagation(); resizing = true; rw = el.offsetWidth; rh = el.offsetHeight; rx = e.clientX; ry = e.clientY; });
+  document.addEventListener('mousemove', (e) => { if (!resizing) return; el.style.width = Math.max(180, rw + (e.clientX - rx)) + 'px'; el.style.minHeight = Math.max(120, rh + (e.clientY - ry)) + 'px'; });
+  document.addEventListener('mouseup', () => { resizing = false; });
+
+  // Drag
+  let dragging = false, dx, dy;
+  header.addEventListener('mousedown', (e) => {
+    if (e.target === title || e.target === del) return;
+    dragging = true; dx = e.clientX - el.offsetLeft; dy = e.clientY - el.offsetTop; el.style.zIndex = 100;
+  });
+  document.addEventListener('mousemove', (e) => { if (dragging) { el.style.left = (e.clientX - dx) + 'px'; el.style.top = (e.clientY - dy) + 'px'; } });
+  document.addEventListener('mouseup', () => { if (dragging) { dragging = false; el.style.zIndex = ''; } });
+
+  if (window.electronAPI) {
+    el.addEventListener('mouseenter', () => window.electronAPI.setIgnoreMouse(false));
+    el.addEventListener('mouseleave', () => window.electronAPI.setIgnoreMouse(true));
+  }
+
+  notesView.appendChild(el);
+  urlInput.focus();
+});
+
+// ── Claude Note ──
+let claudeApiKey = localStorage.getItem('claude_api_key') || '';
+
+document.getElementById('addClaudeBtn').addEventListener('click', () => {
+  const offset = document.querySelectorAll('.sticky-note').length * 30;
+  const el = document.createElement('div');
+  el.className = 'sticky-note';
+  el.style.left = (80 + offset) + 'px';
+  el.style.top = (80 + offset) + 'px';
+  el.style.width = '260px';
+  el.style.minHeight = '180px';
+  el.style.background = 'rgba(255,255,255,0.95)';
+  el.style.color = '#2d2b29';
+
+  const header = document.createElement('div');
+  header.className = 'note-header';
+  const title = document.createElement('input');
+  title.className = 'note-title';
+  title.value = 'Claude';
+  title.style.color = '#d97706';
+  const del = document.createElement('button');
+  del.className = 'note-del';
+  del.textContent = '\u00d7';
+  del.addEventListener('click', () => el.remove());
+  header.appendChild(title);
+  header.appendChild(del);
+
+  const messages = document.createElement('div');
+  messages.className = 'claude-messages';
+
+  const inputRow = document.createElement('div');
+  inputRow.className = 'claude-input-row';
+  const chatInput = document.createElement('input');
+  chatInput.className = 'claude-input';
+  chatInput.placeholder = 'Ask Claude...';
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'claude-send';
+  sendBtn.textContent = 'Send';
+  inputRow.appendChild(chatInput);
+  inputRow.appendChild(sendBtn);
+
+  el.appendChild(header);
+
+  // API key input (shown if no key saved)
+  const keyRow = document.createElement('div');
+  keyRow.className = 'claude-input-row';
+  const keyInput = document.createElement('input');
+  keyInput.className = 'claude-input';
+  keyInput.type = 'password';
+  keyInput.placeholder = 'Paste Anthropic API key...';
+  const keySaveBtn = document.createElement('button');
+  keySaveBtn.className = 'claude-send';
+  keySaveBtn.textContent = 'Save';
+  keyRow.appendChild(keyInput);
+  keyRow.appendChild(keySaveBtn);
+
+  if (!claudeApiKey) {
+    el.appendChild(keyRow);
+    keySaveBtn.addEventListener('click', () => {
+      claudeApiKey = keyInput.value.trim();
+      if (!claudeApiKey) return;
+      localStorage.setItem('claude_api_key', claudeApiKey);
+      el.removeChild(keyRow);
+      el.appendChild(messages);
+      el.appendChild(inputRow);
+      chatInput.focus();
+    });
+    keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') keySaveBtn.click(); });
+  } else {
+    el.appendChild(messages);
+    el.appendChild(inputRow);
+  }
+
+  const chatHistory = [];
+
+  async function sendMessage() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+
+    const userMsg = document.createElement('div');
+    userMsg.className = 'claude-msg user';
+    userMsg.textContent = text;
+    messages.appendChild(userMsg);
+    messages.scrollTop = messages.scrollHeight;
+
+    chatHistory.push({ role: 'user', content: text });
+
+    const thinkingMsg = document.createElement('div');
+    thinkingMsg.className = 'claude-msg assistant';
+    thinkingMsg.textContent = 'Thinking...';
+    messages.appendChild(thinkingMsg);
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': claudeApiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          system: 'You are a helpful assistant inside a sticky note. Keep responses concise. Use plain text with line breaks. Avoid markdown headers and heavy formatting — use dashes for lists and keep it scannable.',
+          messages: chatHistory
+        })
+      });
+      const data = await resp.json();
+      const reply = data.content && data.content[0] ? data.content[0].text : 'Error: ' + JSON.stringify(data.error || data);
+      // Simple markdown-like formatting
+      const formatted = reply
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^- (.+)$/gm, '<span style="display:block;padding-left:10px">- $1</span>')
+        .replace(/\n/g, '<br>');
+      thinkingMsg.innerHTML = formatted;
+      chatHistory.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      thinkingMsg.textContent = 'Error: ' + err.message;
+    }
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+  // Drag
+  let dragging = false, dx, dy;
+  header.addEventListener('mousedown', (e) => {
+    if (e.target === title || e.target === del) return;
+    dragging = true; dx = e.clientX - el.offsetLeft; dy = e.clientY - el.offsetTop;
+    el.style.zIndex = 100;
+  });
+  document.addEventListener('mousemove', (e) => { if (dragging) { el.style.left = (e.clientX - dx) + 'px'; el.style.top = (e.clientY - dy) + 'px'; } });
+  document.addEventListener('mouseup', () => { if (dragging) { dragging = false; el.style.zIndex = ''; } });
+
+  if (window.electronAPI) {
+    el.addEventListener('mouseenter', () => window.electronAPI.setIgnoreMouse(false));
+    el.addEventListener('mouseleave', () => window.electronAPI.setIgnoreMouse(true));
+  }
+
+  notesView.appendChild(el);
+  chatInput.focus();
+});
+
+// Reset API Key
+document.getElementById('resetApiKeyBtn').addEventListener('click', () => {
+  localStorage.removeItem('claude_api_key');
+  claudeApiKey = '';
+});
+
+// Opacity slider
+const noteOpacityInput = document.getElementById('noteOpacity');
+const noteOpacityVal = document.getElementById('noteOpacityVal');
+noteOpacityInput.addEventListener('input', () => {
+  const val = noteOpacityInput.value / 100;
+  noteOpacityVal.textContent = noteOpacityInput.value + '%';
+  document.querySelectorAll('.sticky-note').forEach(el => {
+    el.style.background = 'rgba(255,255,255,' + val + ')';
+  });
+});
+
+// ══════════════════════════════════════════
+//  ELECTRON-SPECIFIC
+// ══════════════════════════════════════════
+document.getElementById('hideBtn').addEventListener('click', collapseApp);
+
 if (window.electronAPI) {
+  window.electronAPI.onToggleExpand(() => { isExpanded ? collapseApp() : expandApp(); });
   window.electronAPI.onTogglePlay(toggle);
   window.electronAPI.onRestart(resetPosition);
-  window.electronAPI.onSpeedChange((delta) => {
-    speed = Math.max(20, Math.min(400, speed + delta));
-    speedInput.value = speed; speedValEl.textContent = speed;
+  window.electronAPI.onSpeedChange((d) => {
+    speed = Math.max(20, Math.min(400, speed + d));
+    speedInput.value = speed;
+    speedValEl.textContent = speed + ' px/s';
+    updateDuration();
   });
   window.electronAPI.onToggleControls(() => {
-    tpControls.classList.toggle('hidden');
+    document.getElementById('tp-controls').classList.toggle('hidden');
   });
-  window.electronAPI.onClickThroughChanged((isThrough) => {
-    ctBadge.textContent = isThrough ? 'CLICK-THROUGH' : 'INTERACTIVE';
-    ctBadge.className = isThrough ? 'through' : 'interactive';
-  });
-}
 
-// ══════════════════════════════
-//  HOVER-BASED CLICK-THROUGH
-//  Controls stay interactive even in click-through mode
-// ══════════════════════════════
-if (window.electronAPI) {
+  // Hover-based click-through:
+  // Controls, mode bar, toolbar = interactive
+  // Viewport + empty notes area = click-through
+  // Individual sticky notes handle their own hover
   const interactiveZones = [
     document.getElementById('mode-bar'),
-    tpControls,
-    notesToolbar,
-    notesView,
+    document.getElementById('tp-controls'),
+    document.getElementById('notes-toolbar'),
   ];
   for (const zone of interactiveZones) {
+    if (!zone) continue;
     zone.addEventListener('mouseenter', () => {
-      window.electronAPI.setIgnoreMouse(false);
+      if (isExpanded) window.electronAPI.setIgnoreMouse(false);
     });
     zone.addEventListener('mouseleave', () => {
-      window.electronAPI.setIgnoreMouse(true);
+      if (isExpanded) window.electronAPI.setIgnoreMouse(true);
     });
   }
-}
 
-// Init
-scriptInput.value = DEFAULT_SCRIPT;
-setScript(DEFAULT_SCRIPT);
+  // Viewport = always click-through
+  const vp = document.getElementById('viewport');
+  if (vp) {
+    vp.addEventListener('mouseenter', () => {
+      if (isExpanded) window.electronAPI.setIgnoreMouse(true);
+    });
+  }
+
+  // JS-based window drag on mode bar (CSS app-region doesn't work with click-through)
+  const modeBar = document.getElementById('mode-bar');
+  let winDragging = false;
+  let winDragStartX = 0, winDragStartY = 0;
+  modeBar.addEventListener('mousedown', (e) => {
+    // Only drag from empty space (not buttons)
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+    winDragging = true;
+    winDragStartX = e.screenX;
+    winDragStartY = e.screenY;
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!winDragging) return;
+    const dx = e.screenX - winDragStartX;
+    const dy = e.screenY - winDragStartY;
+    winDragStartX = e.screenX;
+    winDragStartY = e.screenY;
+    window.electronAPI.moveWindow(dx, dy);
+  });
+  document.addEventListener('mouseup', () => { winDragging = false; });
+}
 </script>
 </body>
 </html>
